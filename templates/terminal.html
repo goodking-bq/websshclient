@@ -44,8 +44,21 @@
             });
             socket.on('ssh login response', function (msg) {
                 now_terminal.echo(msg.data);
+            });
+            socket.on('ssh login success', function (msg) {
+                now_terminal.pop().pop();
+                now_terminal.clear();
+                now_terminal.resume();
+                now_terminal.push(function (command, term) {
+                    socket.emit('exec command', {data: command});
+                    term.pause();
+                }, {prompt: '[root@localhost ~]#', greeting: false, name: host})
+            });
+            socket.on('ssh login failed', function (msg) {
+                now_terminal.echo(msg.data);
                 now_terminal.resume();
             });
+
         });
 
     </script>

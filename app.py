@@ -18,6 +18,14 @@ from paramiko.py3compat import input
 
 import paramiko
 
+try:
+    import termios
+    import tty
+
+    has_termios = True
+except ImportError:
+    has_termios = False
+
 # try:
 #     import interactive
 # except ImportError:
@@ -82,6 +90,57 @@ def manual_auth(username, hostname, password=None):
         t.auth_publickey(username, key)
     else:
         t.auth_password(username, password)
+
+
+def interactive_shell(chan):
+    if has_termios:
+        posix_shell(chan)
+    else:
+        windows_shell(chan)
+
+
+def posix_shell(chan):
+    import select
+
+    oldtty = termios.tcgetattr(sys.stdin)
+    try:
+        tty.setraw(sys.stdin.fileno())
+        tty.setcbreak(sys.stdin.fileno())
+        chan.settimeout(0.0)
+
+        while True:
+            r, w, e = select.select([chan, sys.stdin], [], [])
+            if chan in r:
+                try:
+                    x = u(chan.recv(1024))
+                    if len(x) == 0:
+                        sys.stdout.write('\r\n*** EOF\r\n')
+                        break
+                    sys.stdout.write(x)
+                    sys.stdout.flush()
+                except socket.timeout:
+                    pass
+            if sys.stdin in r:
+                x = sys.stdin.read(1)
+                if len(x) == 0:
+                    break
+                chan.send(x)
+
+    finally:
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, oldtty)
+
+
+# thanks to Mike Looijmans for this code
+def windows_shell(sock):
+    while True:
+        data = sock.recv(256)
+        if not data:
+            sys.stdout.write('\r\n*** EOF ***\r\n\r\n')
+            sys.stdout.flush()
+            break
+        emit('command result',
+             {'data': data})
+
 
 
 def background_thread():
@@ -195,27 +254,27 @@ def ssh_login(message):
             # manual_auth(username, hostname)
         if not t.is_authenticated():
             print('*** Authentication failed. :(')
-            emit('ssh login response', {'data': '*** Authentication failed. :('})
+            emit('ssh login failed', {'data': '*** Authentication failed. :('})
             t.close()
         else:
-            emit('ssh login response', {'data': 'login success'})
-
-            #
-            # chan = t.open_session()
-            # chan.get_pty()
-            # chan.invoke_shell()
-            # print('*** Here we go!\n')
-            # interactive.interactive_shell(chan)
-            # chan.close()
-            # t.close()
+            emit('ssh login success', {'data': 'login success'})
+        chan = t.open_session()
+        chan.get_pty()
+        chan.invoke_shell()
+        print('*** Here we go!\n')
+        global thread
+        if thread is None:
+            thread = socketio.start_background_task(target=interactive_shell,args=(chan,))
+        # interactive_shell(chan)
+        # chan.close()
+        # t.close()
+        socketio.chan = chan
 
 
 @socketio.on('exec command', namespace='/test')
 def exec_command(message):
     try:
-        stdin, stdout, stderr = socketio.ssh.exec_command(message['data'])
-        emit('command result',
-             {'data': stderr.read() or stdout.read(), 'count': session['receive_count']})
+        socketio.chan.send(message['data'])
     except Exception as e:
         emit('command result',
              {'data': e.message, 'count': session['receive_count']})
