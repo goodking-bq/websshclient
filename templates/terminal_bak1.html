@@ -29,7 +29,27 @@
                         else {
                             password = command;
                             term.pause();
-                            socket.emit('ssh login', {host: host, port: port, user: user, password: password});
+                            $.ajax({
+                                url: '{{ url_for('client_login') }}',
+                                type: 'POST',
+                                data: {host: host, port: port, user: user, password: password},
+                                success: function (data) {
+                                    if (data.errors == 0) {
+                                        term.echo('登陆成功');
+                                        term.pop().pop();
+                                        term.clear();
+                                        term.resume();
+                                        term.push(function (command, term) {
+                                            socket.emit('exec command', {data: command});
+                                            term.pause();
+                                        }, {prompt: '[root@localhost ~]#', greeting: false, name: host})
+                                    }
+                                    else {
+                                        term.echo(data.data);
+                                        term.set_prompt('重新输入密码:')
+                                    }
+                                }
+                            })
                         }
                     }, {prompt: '用户名:', greeting: false, name: 'loginon'})
                 }
@@ -39,10 +59,6 @@
                 now_terminal.resume();
             });
             socket.on('command result', function (msg) {
-                now_terminal.echo(msg.data);
-                now_terminal.resume();
-            });
-            socket.on('ssh login response', function (msg) {
                 now_terminal.echo(msg.data);
                 now_terminal.resume();
             });
