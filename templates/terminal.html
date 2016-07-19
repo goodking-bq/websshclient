@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <title>Title</title>
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/jquery.terminal-0.10.12.min.css') }}">
     <script src="{{ url_for('static',filename='js/jquery-1.7.1.min.js') }}"></script>
-    <script src="https://cdn.jsdelivr.net/jquery.terminal/0.10.12/jquery.terminal.min.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/jquery.terminal/0.10.12/jquery.terminal.min.css">
+    <script src="{{ url_for('static',filename='js/jquery.terminal-0.10.12.min.js') }}"></script>
     <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/1.3.5/socket.io.min.js"></script>
+    <script src="{{ url_for('static',filename='js/unix_formatting.js') }}"></script>
     <script>
         jQuery(document).ready(function ($) {
             namespace = '/test';
@@ -34,10 +35,6 @@
                     }, {prompt: '用户名:', greeting: false, name: 'loginon'})
                 }
             });
-            socket.on('my response', function (msg) {
-                now_terminal.echo(msg.data);
-                now_terminal.resume();
-            });
             socket.on('command result', function (msg) {
                 now_terminal.echo(msg.data);
                 now_terminal.resume();
@@ -49,14 +46,16 @@
                 now_terminal.pop().pop();
                 now_terminal.clear();
                 now_terminal.resume();
-                now_terminal.push(function (command, term) {
-                    socket.emit('exec command', {data: command});
-                    term.pause();
-                }, {prompt: '[root@localhost ~]#', greeting: false, name: host})
             });
             socket.on('ssh login failed', function (msg) {
                 now_terminal.echo(msg.data);
                 now_terminal.resume();
+            });
+            socket.on('set prompt', function (msg) {
+                now_terminal.push(function (command, term) {
+                    socket.emit('exec command', {data: command});
+                    term.pause();
+                }, {prompt: msg.data});
             });
 
         });

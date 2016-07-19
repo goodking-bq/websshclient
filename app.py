@@ -135,12 +135,19 @@ def windows_shell(sock):
     while True:
         data = sock.recv(256)
         if not data:
-            sys.stdout.write('\r\n*** EOF ***\r\n\r\n')
-            sys.stdout.flush()
             break
-        emit('command result',
-             {'data': data})
-
+        if data[-2:] == '\r\n':
+            pass
+        elif data.endswith('# '):
+            _data = data.splitlines()
+            socketio.emit('set prompt',
+                          {'data': _data[-1]}, namespace='/test')
+            eldata = data.replace(_data[-1], '')
+            socketio.emit('command result',
+                          {'data': eldata}, namespace='/test')
+        else:
+            socketio.emit('command result',
+                          {'data': data}, namespace='/test')
 
 
 def background_thread():
@@ -165,26 +172,6 @@ def index():
 @app.route('/terminal/')
 def terminal():
     return render_template('terminal.html')
-
-
-@app.route('/client_login/', methods=['POST'])
-def client_login():
-    user = request.form.get('user')
-    password = request.form.get('password')
-    host = request.form.get('host')
-    port = request.form.get('port')
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    # socketio.emit('new ssh client', {'data': {'host': host, 'port': int(port), 'user': user, 'password': password}},
-    #               namespace='/test')
-    try:
-        ssh.connect(hostname=b'zousj.cn', port=7726, username=b'root', password=b'www.zousj.cn@golsee7726')
-        # session['ssh'] = ssh # 不能赋给session
-        socketio.ssh = ssh
-        return jsonify({'data': 'login success', 'errors': 0})
-    except Exception as e:
-        print(e)
-        return jsonify({'data': '登陆失败', 'errors': 1})
 
 
 @app.route('/exec/', methods=['POST', 'GET'])
@@ -264,20 +251,17 @@ def ssh_login(message):
         print('*** Here we go!\n')
         global thread
         if thread is None:
-            thread = socketio.start_background_task(target=interactive_shell,args=(chan,))
-        # interactive_shell(chan)
-        # chan.close()
-        # t.close()
+            thread = socketio.start_background_task(interactive_shell, chan)
         socketio.chan = chan
 
 
 @socketio.on('exec command', namespace='/test')
 def exec_command(message):
     try:
-        socketio.chan.send(message['data'])
+        socketio.chan.send(message['data'] + '\r\n\r\n\r\n')
     except Exception as e:
         emit('command result',
-             {'data': e.message, 'count': session['receive_count']})
+             {'data': e.message})
 
 
 @socketio.on('my broadcast event', namespace='/test')
