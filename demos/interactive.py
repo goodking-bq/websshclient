@@ -92,6 +92,7 @@ def windows_shell(chan):
             d = sys.stdin.read(1)
             if not d:
                 break
+            print d
             chan.send(d)
     except EOFError:
         # user hit ^Z or F6

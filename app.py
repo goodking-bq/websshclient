@@ -258,7 +258,9 @@ def ssh_login(message):
 @socketio.on('exec command', namespace='/test')
 def exec_command(message):
     try:
-        socketio.chan.send(message['data'] + '\r\n\r\n\r\n')
+        for r in message['data']:
+            socketio.chan.send(r)
+        socketio.chan.send('\r\n')
     except Exception as e:
         emit('command result',
              {'data': e.message})
