@@ -31,6 +31,7 @@ import traceback
 from paramiko.py3compat import input
 
 import paramiko
+
 try:
     import interactive
 except ImportError:
@@ -162,7 +163,7 @@ try:
         sys.exit(1)
 
     chan = t.open_session()
-    chan.get_pty()
+    chan.get_pty(term='xterm', width=160, height=72)  #
     chan.invoke_shell()
     print('*** Here we go!\n')
     interactive.interactive_shell(chan)
@@ -177,5 +178,3 @@ except Exception as e:
     except:
         pass
     sys.exit(1)
-
-
